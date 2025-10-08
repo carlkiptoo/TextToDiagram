@@ -29,12 +29,14 @@ export default function Home() {
 
       if (data.chart) {
         setChart(data.chart);
+      } else if (data.error) {
+        setError(data.error);
       } else {
-        alert("Failed to generate diagram");
+        setError("Failed to generate diagram");
       }
     } catch (error) {
       console.error("Error:", error);
-      setError("Failed to generate diagram");
+      setError(error instanceof Error ? error.message : "Failed to generate diagram");
     } finally {
       setLoading(false);
     }
@@ -46,7 +48,7 @@ export default function Home() {
         Text to Diagram Gen
       </h1>
       <textarea
-        className="border text-black w-full max-w-2xl p-3 rounded-mb mb-4"
+        className="border text-black w-full max-w-2xl p-3 rounded-md mb-4"
         rows={4}
         placeholder="Describe your process here.."
         value={text}

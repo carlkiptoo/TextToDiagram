@@ -1,5 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 
+interface Node {
+    id: string;
+    label: string;
+}
+
+interface Edge {
+    from: string;
+    to: string;
+}
+
+interface GraphData {
+    nodes: Node[];
+    edges: Edge[];
+}
 
 export const maxDuration = 60;
 
@@ -44,12 +58,14 @@ Text: ${text}
         }
 
         const data = await completion.json();
+
         if (!data.response) {
             throw new Error("No response from Ollama");
         }
         let raw = data.response.trim();
 
         const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+
         if (jsonMatch) {
             raw = jsonMatch[1].trim();
         }
@@ -66,7 +82,10 @@ Text: ${text}
 
             const chart = jsonToMermaid(parsed);
 
+            console.log("Generated Mermaid chart:", JSON.stringify(chart));
+
             return NextResponse.json({ chart });
+
         } catch (error) {
             console.error("Initial JSON parse error:", error);
 
@@ -78,10 +97,13 @@ Text: ${text}
 
                 const repaired = JSON.parse(raw);
                 const chart = jsonToMermaid(repaired);
+
+                console.log("Generated Mermaid chart:", JSON.stringify(chart));
+
                 return NextResponse.json({ chart });
 
             } catch (error) {
-                console.error("Ollama error:", error);
+                console.error("Repair failed:", error);
                 return NextResponse.json({ error: "Failed to generate diagram" }, { status: 500 });
             }
         }
@@ -91,47 +113,45 @@ Text: ${text}
     }
 
 
-    interface Node {
-        id: string;
-        label: string;
-    }
-
-    interface Edge {
-        from: string;
-        to: string;
-    }
-
-    interface GraphData {
-        nodes: Node[];
-        edges: Edge[];
-    }
-
     function jsonToMermaid(data: GraphData) {
         let chart = `graph TD\n`;
 
         const nodeMap = new Map<string, string>();
-        
+
         for (const node of data.nodes) {
+
             if (!node.id || !node.label) continue;
-            nodeMap.set(node.id, node.label);
-            chart += `  ${node.id}["${node.label}"]\n`;
+
+            const safeId = normalizeId(node.id)
+            if (!/^[a-z0-9_-]+$/.test(safeId)) {
+                console.warn("Invalid node id found:", node.id, "normalized to:", safeId);
+            }
+
+            nodeMap.set(safeId, node.label);
+            chart += `  ${safeId}["${node.label}"]\n`;
         }
 
         for (const edge of data.edges) {
             if (!edge.from || !edge.to) continue;
+            const from = normalizeId(edge.from);
+            const to = normalizeId(edge.to);
 
-            if (!nodeMap.has(edge.from)) {
-                chart += ` ${edge.from}["${edge.from}"]\n`;
-                nodeMap.set(edge.from, edge.from);
+            if (!nodeMap.has(from)) {
+                chart += `  ${from}["${from}"]\n`;
+                nodeMap.set(from, from);
+            }
+            if (!nodeMap.has(to)) {
+                chart += `  ${to}["${to}"]\n`;
+                nodeMap.set(to, to);
             }
 
-            if (!nodeMap.has(edge.to)) {
-                chart += `${edge.to}["${edge.to}"]\n`;
-                nodeMap.set(edge.to, edge.to);
-            }
-
-            chart += `  ${edge.from} --> ${edge.to}\n`;
+            chart += `  ${from} --> ${to}\n`;
         }
+
         return chart;
+    }
+
+    function normalizeId(id: string) {
+        return id.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase().replace(/\s+/g, '_');
     }
 }
